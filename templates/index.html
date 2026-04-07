@@ -1,75 +1,638 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>SSH Sentinel Dashboard</title>
-    <style>
-        body {
-            background-color: #111;
-            color: #eee;
-            font-family: Arial, sans-serif;
-            text-align: center;
-            padding: 50px;
-        }
-        h1 {
-            color: #00ffcc;
-        }
-        input, button {
-            padding: 10px;
-            margin: 10px;
-            border: none;
-            border-radius: 5px;
-            font-size: 16px;
-        }
-        button {
-            background-color: #00cc99;
-            color: #fff;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #009977;
-        }
-        img {
-            max-width: 90%;
-            margin-top: 20px;
-        }
-        iframe {
-            width: 90%;
-            height: 400px;
-            margin-top: 20px;
-            border: none;
-        }
-        a {
-            color: #00ffcc;
-            display: block;
-            margin-top: 20px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>SSH Sentinel — Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    /* ── Reset & base ── */
+    *{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#0d1117;--surface:#161b22;--border:#30363d;
+      --text:#c9d1d9;--muted:#8b949e;--accent:#58a6ff;
+      --green:#3fb950;--red:#f85149;--orange:#d29922;--purple:#bc8cff;
+    }
+    body{background:var(--bg);color:var(--text);font-family:'Segoe UI',Arial,sans-serif;
+         display:flex;min-height:100vh;overflow-x:hidden}
+
+    /* ── Sidebar ── */
+    .sidebar{width:220px;min-height:100vh;background:var(--surface);
+             border-right:1px solid var(--border);display:flex;flex-direction:column;
+             padding:20px 0;position:fixed;top:0;left:0;z-index:100}
+    .sidebar .logo{padding:0 20px 24px;border-bottom:1px solid var(--border)}
+    .sidebar .logo h1{font-size:16px;color:var(--accent);letter-spacing:2px}
+    .sidebar .logo p{font-size:11px;color:var(--muted);margin-top:3px}
+    .nav-item{display:flex;align-items:center;gap:10px;padding:11px 20px;
+              cursor:pointer;color:var(--muted);font-size:14px;
+              border-left:3px solid transparent;transition:.15s}
+    .nav-item:hover{color:var(--text);background:rgba(88,166,255,.07)}
+    .nav-item.active{color:var(--accent);border-left-color:var(--accent);
+                     background:rgba(88,166,255,.1)}
+    .nav-item .icon{width:18px;text-align:center}
+    .sidebar-footer{margin-top:auto;padding:16px 20px;border-top:1px solid var(--border)}
+    .sidebar-footer a{color:var(--muted);font-size:13px;text-decoration:none;display:block}
+    .sidebar-footer a:hover{color:var(--red)}
+
+    /* ── Main content ── */
+    .main{margin-left:220px;flex:1;padding:28px;min-width:0}
+    .page{display:none}.page.active{display:block}
+
+    /* ── Header ── */
+    .page-header{display:flex;justify-content:space-between;align-items:center;
+                 margin-bottom:24px}
+    .page-header h2{font-size:20px;font-weight:600}
+    .refresh-btn{background:var(--surface);border:1px solid var(--border);
+                 color:var(--text);padding:7px 14px;border-radius:6px;
+                 cursor:pointer;font-size:13px;transition:.2s}
+    .refresh-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+    /* ── Stat cards ── */
+    .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;margin-bottom:24px}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;
+          padding:20px;transition:.2s}
+    .card:hover{border-color:var(--accent)}
+    .card .label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px}
+    .card .value{font-size:32px;font-weight:700;margin:8px 0 4px;color:var(--text)}
+    .card.green .value{color:var(--green)}
+    .card.red   .value{color:var(--red)}
+    .card.orange.value{color:var(--orange)}
+    .card.blue  .value{color:var(--accent)}
+    .card .sub{font-size:12px;color:var(--muted)}
+
+    /* ── Charts row ── */
+    .charts-row{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:24px}
+    .chart-box{background:var(--surface);border:1px solid var(--border);
+               border-radius:10px;padding:20px}
+    .chart-box h3{font-size:14px;color:var(--muted);margin-bottom:16px;
+                  text-transform:uppercase;letter-spacing:.8px}
+    .chart-container{position:relative;height:220px}
+
+    /* ── Table ── */
+    .table-box{background:var(--surface);border:1px solid var(--border);
+               border-radius:10px;overflow:hidden;margin-bottom:24px}
+    .table-header{display:flex;justify-content:space-between;align-items:center;
+                  padding:16px 20px;border-bottom:1px solid var(--border)}
+    .table-header h3{font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px}
+    .filter-row{display:flex;gap:10px;align-items:center}
+    select,input.filter-input{background:var(--bg);border:1px solid var(--border);
+           color:var(--text);padding:6px 10px;border-radius:6px;font-size:13px;outline:none}
+    select:focus,input.filter-input:focus{border-color:var(--accent)}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th{padding:10px 16px;text-align:left;color:var(--muted);
+       font-weight:500;background:rgba(255,255,255,.02);white-space:nowrap}
+    td{padding:10px 16px;border-top:1px solid var(--border);
+       white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px}
+    tr:hover td{background:rgba(88,166,255,.04)}
+    .badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600}
+    .badge-ssh{background:rgba(88,166,255,.15);color:var(--accent)}
+    .badge-ftp{background:rgba(63,185,80,.15);color:var(--green)}
+    .badge-http{background:rgba(210,153,34,.15);color:var(--orange)}
+    .badge-telnet{background:rgba(248,81,73,.15);color:var(--red)}
+    .badge-mysql{background:rgba(188,140,255,.15);color:var(--purple)}
+    .badge-redis{background:rgba(248,81,73,.15);color:#ff6b6b}
+    .badge-smtp{background:rgba(63,185,80,.15);color:#7ee8a2}
+    .badge-connection{background:rgba(255,255,255,.06);color:var(--muted)}
+    .badge-auth_attempt,.badge-auth_attempt_pubkey{background:rgba(248,81,73,.15);color:var(--red)}
+    .badge-command{background:rgba(210,153,34,.15);color:var(--orange)}
+    .badge-download_attempt{background:rgba(188,140,255,.2);color:var(--purple)}
+    .badge-http_post_creds{background:rgba(248,81,73,.2);color:var(--red)}
+
+    /* ── Action button ── */
+    .btn{border:none;border-radius:5px;padding:5px 11px;font-size:12px;
+         cursor:pointer;transition:.15s;font-weight:500}
+    .btn-red{background:rgba(248,81,73,.15);color:var(--red);border:1px solid rgba(248,81,73,.3)}
+    .btn-red:hover{background:rgba(248,81,73,.3)}
+    .btn-green{background:rgba(63,185,80,.15);color:var(--green);border:1px solid rgba(63,185,80,.3)}
+    .btn-green:hover{background:rgba(63,185,80,.3)}
+    .btn-blue{background:rgba(88,166,255,.15);color:var(--accent);border:1px solid rgba(88,166,255,.3)}
+    .btn-blue:hover{background:rgba(88,166,255,.3)}
+
+    /* ── Services grid ── */
+    .services-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:24px}
+    .svc-card{background:var(--surface);border:1px solid var(--border);
+              border-radius:8px;padding:14px;text-align:center}
+    .svc-card .svc-name{font-size:13px;font-weight:600;text-transform:uppercase;
+                        color:var(--accent);letter-spacing:1px}
+    .svc-card .svc-port{font-size:11px;color:var(--muted);margin-top:2px}
+    .svc-card .svc-count{font-size:24px;font-weight:700;margin-top:8px;color:var(--text)}
+    .svc-card .svc-label{font-size:11px;color:var(--muted)}
+
+    /* ── Map iframe ── */
+    .map-frame{width:100%;height:500px;border:none;border-radius:10px;
+               background:var(--surface)}
+    .map-actions{display:flex;gap:10px;margin-bottom:12px}
+
+    /* ── Analyze section ── */
+    .analyze-box{background:var(--surface);border:1px solid var(--border);
+                 border-radius:10px;padding:24px;margin-bottom:24px}
+    .analyze-box h3{font-size:16px;margin-bottom:16px;color:var(--text)}
+    .inline-form{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    .inline-form input{background:var(--bg);border:1px solid var(--border);
+                       color:var(--text);padding:9px 12px;border-radius:6px;
+                       font-size:14px;outline:none;width:140px}
+    .inline-form input:focus{border-color:var(--accent)}
+    .btn-submit{background:var(--accent);color:#000;border:none;border-radius:6px;
+                padding:9px 18px;font-size:14px;font-weight:600;cursor:pointer}
+    .btn-submit:hover{opacity:.85}
+    .msg-box{margin-top:14px;padding:12px 16px;background:rgba(63,185,80,.1);
+             border:1px solid rgba(63,185,80,.3);border-radius:6px;
+             font-size:13px;color:var(--green)}
+
+    /* ── Toast ── */
+    #toast{position:fixed;bottom:24px;right:24px;background:#238636;color:#fff;
+           padding:12px 20px;border-radius:8px;font-size:14px;
+           opacity:0;pointer-events:none;transition:opacity .3s;z-index:999}
+    #toast.show{opacity:1}
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar{width:6px}
+    ::-webkit-scrollbar-track{background:var(--bg)}
+    ::-webkit-scrollbar-thumb{background:#30363d;border-radius:3px}
+  </style>
 </head>
 <body>
-    <h1>SSH Sentinel</h1>
-    <form method="POST">
-        <label>Analyze logs from past (minutes):</label><br>
-        <input type="number" name="minutes" placeholder="e.g. 1440" required>
-        <button type="submit">Run Analysis</button>
-    </form>
 
-    {% if message %}
-        <p>{{ message }}</p>
-    {% endif %}
+<!-- ── Sidebar ── -->
+<nav class="sidebar">
+  <div class="logo">
+    <h1>🛡️ SENTINEL</h1>
+    <p>Honeypot Dashboard</p>
+  </div>
+  <div class="nav-item active" onclick="showPage('overview')">
+    <span class="icon">📊</span> Overview
+  </div>
+  <div class="nav-item" onclick="showPage('feed')">
+    <span class="icon">📡</span> Live Feed
+  </div>
+  <div class="nav-item" onclick="showPage('attackers')">
+    <span class="icon">🎯</span> Attackers
+  </div>
+  <div class="nav-item" onclick="showPage('credentials')">
+    <span class="icon">🔑</span> Credentials
+  </div>
+  <div class="nav-item" onclick="showPage('services')">
+    <span class="icon">⚙️</span> Services
+  </div>
+  <div class="nav-item" onclick="showPage('map')">
+    <span class="icon">🗺️</span> Map
+  </div>
+  <div class="nav-item" onclick="showPage('reports')">
+    <span class="icon">📋</span> Reports
+  </div>
+  <div class="nav-item" onclick="showPage('banned')">
+    <span class="icon">🚫</span> Banned IPs
+  </div>
+  <div class="sidebar-footer">
+    <a href="/logout">⬅ Logout</a>
+  </div>
+</nav>
 
-    {% if chart %}
-        <h2>Attack Count by IP</h2>
-        <img src="{{ url_for('static', filename=chart) }}" alt="Chart">
-    {% endif %}
+<!-- ── Main ── -->
+<div class="main">
 
-    {% if heatmap %}
-        <h2>Geographic Attack Heatmap</h2>
-        <iframe src="{{ url_for('static', filename=heatmap) }}"></iframe>
-    {% endif %}
+  <!-- ── Overview ── -->
+  <div id="page-overview" class="page active">
+    <div class="page-header">
+      <h2>Overview</h2>
+      <button class="refresh-btn" onclick="loadOverview()">⟳ Refresh</button>
+    </div>
+    <div class="cards" id="stat-cards">
+      <div class="card blue"><div class="label">Total Events</div><div class="value" id="c-total">—</div><div class="sub">all time</div></div>
+      <div class="card red"><div class="label">Unique IPs</div><div class="value" id="c-ips">—</div><div class="sub">attackers</div></div>
+      <div class="card orange"><div class="label">Last Hour</div><div class="value" id="c-recent">—</div><div class="sub">events</div></div>
+      <div class="card"><div class="label">Banned IPs</div><div class="value" id="c-banned">—</div><div class="sub">auto + manual</div></div>
+    </div>
+    <div class="charts-row">
+      <div class="chart-box">
+        <h3>Events — Last 24 Hours</h3>
+        <div class="chart-container"><canvas id="timelineChart"></canvas></div>
+      </div>
+      <div class="chart-box">
+        <h3>By Service</h3>
+        <div class="chart-container"><canvas id="serviceChart"></canvas></div>
+      </div>
+    </div>
+    <div class="table-box">
+      <div class="table-header"><h3>Top 10 Attacking IPs</h3></div>
+      <table>
+        <thead><tr><th>#</th><th>IP Address</th><th>Country</th><th>Events</th><th>Action</th></tr></thead>
+        <tbody id="top-ips-body"></tbody>
+      </table>
+    </div>
+  </div>
 
-    {% if csv_report %}
-        <a href="{{ url_for('static', filename=csv_report) }}" download>Download CSV Report</a>
-    {% endif %}
+  <!-- ── Live Feed ── -->
+  <div id="page-feed" class="page">
+    <div class="page-header">
+      <h2>Live Event Feed</h2>
+      <div style="display:flex;gap:10px;align-items:center">
+        <select id="feed-service" onchange="loadFeed()">
+          <option value="">All Services</option>
+          <option>ssh</option><option>ftp</option><option>http</option>
+          <option>telnet</option><option>mysql</option><option>redis</option><option>smtp</option>
+        </select>
+        <input class="filter-input" id="feed-ip" placeholder="Filter IP…" oninput="loadFeed()">
+        <button class="refresh-btn" onclick="loadFeed()">⟳ Refresh</button>
+      </div>
+    </div>
+    <div class="table-box">
+      <table>
+        <thead><tr><th>Timestamp (UTC)</th><th>Service</th><th>Type</th><th>Source IP</th><th>Country</th><th>Username</th><th>Password</th><th>Payload</th></tr></thead>
+        <tbody id="feed-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Attackers ── -->
+  <div id="page-attackers" class="page">
+    <div class="page-header">
+      <h2>Attacker Profiles</h2>
+      <button class="refresh-btn" onclick="loadAttackers()">⟳ Refresh</button>
+    </div>
+    <div class="table-box">
+      <table>
+        <thead><tr><th>IP Address</th><th>Country</th><th>City</th><th>ISP/Org</th><th>Total Events</th><th>Action</th></tr></thead>
+        <tbody id="attackers-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Credentials ── -->
+  <div id="page-credentials" class="page">
+    <div class="page-header">
+      <h2>Attempted Credentials</h2>
+      <button class="refresh-btn" onclick="loadStats()">⟳ Refresh</button>
+    </div>
+    <div class="table-box">
+      <table>
+        <thead><tr><th>#</th><th>Username</th><th>Password</th><th>Count</th></tr></thead>
+        <tbody id="creds-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Services ── -->
+  <div id="page-services" class="page">
+    <div class="page-header">
+      <h2>Honeypot Services</h2>
+      <button class="refresh-btn" onclick="loadServices()">⟳ Refresh</button>
+    </div>
+    <div class="services-grid" id="services-grid"></div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px">
+      <h3 style="font-size:14px;margin-bottom:12px;color:var(--muted)">PORT REFERENCE</h3>
+      <table style="font-size:13px">
+        <thead><tr><th>Service</th><th>Honeypot Port</th><th>Real Port</th><th>Protocol</th></tr></thead>
+        <tbody>
+          <tr><td>SSH</td><td>2222</td><td>22</td><td>TCP</td></tr>
+          <tr><td>FTP</td><td>2121</td><td>21</td><td>TCP</td></tr>
+          <tr><td>HTTP</td><td>8080</td><td>80</td><td>TCP</td></tr>
+          <tr><td>Telnet</td><td>2323</td><td>23</td><td>TCP</td></tr>
+          <tr><td>MySQL</td><td>3307</td><td>3306</td><td>TCP</td></tr>
+          <tr><td>Redis</td><td>6380</td><td>6379</td><td>TCP</td></tr>
+          <tr><td>SMTP</td><td>2525</td><td>25/587</td><td>TCP</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Map ── -->
+  <div id="page-map" class="page">
+    <div class="page-header"><h2>Attack Map</h2></div>
+    <div class="map-actions">
+      <button class="btn btn-blue" onclick="generateHeatmap()">🗺️ Regenerate Heatmap</button>
+      <a href="/heatmap" target="_blank"><button class="btn btn-blue">↗ Open Fullscreen</button></a>
+    </div>
+    <iframe id="heatmap-frame" class="map-frame" src="about:blank"></iframe>
+  </div>
+
+  <!-- ── Reports ── -->
+  <div id="page-reports" class="page">
+    <div class="page-header"><h2>Reports & Analysis</h2></div>
+    <div class="analyze-box">
+      <h3>⬇ Export Honeypot Events (CSV)</h3>
+      <div class="inline-form" style="margin-top:12px">
+        <a href="/export/csv"><button class="btn-submit" type="button">Download CSV</button></a>
+      </div>
+    </div>
+    <div class="analyze-box">
+      <h3>🔍 Analyse System SSH Logs (journalctl)</h3>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px">
+        Runs the legacy analysis pipeline on your system's real SSH daemon logs.
+      </p>
+      <form method="POST" action="/analyze" class="inline-form">
+        <input type="number" name="minutes" placeholder="Minutes back" value="1440" min="1" max="525600">
+        <button class="btn-submit" type="submit">Run Analysis</button>
+      </form>
+      {% if analyze_message %}
+      <div class="msg-box">{{ analyze_message }}</div>
+      {% endif %}
+      {% if chart %}
+      <img src="{{ url_for('static', filename=chart) }}" style="max-width:100%;margin-top:16px;border-radius:8px">
+      {% endif %}
+      {% if csv_report %}
+      <br><a href="{{ url_for('static', filename=csv_report) }}" download
+             style="color:var(--accent);font-size:13px;margin-top:12px;display:inline-block">
+        ⬇ Download legacy CSV
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ── Banned IPs ── -->
+  <div id="page-banned" class="page">
+    <div class="page-header">
+      <h2>Banned IPs</h2>
+      <button class="refresh-btn" onclick="loadBanned()">⟳ Refresh</button>
+    </div>
+    <div class="table-box">
+      <table>
+        <thead><tr><th>IP Address</th><th>Reason</th><th>Banned At (UTC)</th><th>Action</th></tr></thead>
+        <tbody id="banned-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- .main -->
+
+<div id="toast">✓ Done</div>
+
+<script>
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+
+function showToast(msg, color='#238636'){
+  const t = $('toast');
+  t.textContent = msg;
+  t.style.background = color;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2500);
+}
+
+function badge(cls, text){
+  return `<span class="badge badge-${cls}">${text}</span>`;
+}
+
+function showPage(name){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  $(`page-${name}`).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>{
+    if(n.getAttribute('onclick')&&n.getAttribute('onclick').includes(name))
+      n.classList.add('active');
+  });
+  // Lazy load
+  if(name==='overview')   loadOverview();
+  if(name==='feed')       loadFeed();
+  if(name==='attackers')  loadAttackers();
+  if(name==='credentials')loadStats();
+  if(name==='services')   loadServices();
+  if(name==='map')        loadMap();
+  if(name==='banned')     loadBanned();
+}
+
+// ── Charts ───────────────────────────────────────────────────────────────────
+let timelineChart, serviceChart;
+
+function initCharts(){
+  const baseOpts = {
+    plugins:{legend:{labels:{color:'#8b949e',font:{size:12}}}},
+    scales:{x:{ticks:{color:'#8b949e'},grid:{color:'#21262d'}},
+            y:{ticks:{color:'#8b949e'},grid:{color:'#21262d'}}}
+  };
+
+  timelineChart = new Chart($('timelineChart'), {
+    type:'line',
+    data:{labels:[],datasets:[{label:'Events',data:[],
+          borderColor:'#58a6ff',backgroundColor:'rgba(88,166,255,.1)',
+          fill:true,tension:.3,pointRadius:3,borderWidth:2}]},
+    options:{...baseOpts,plugins:{legend:{display:false}},
+             scales:{x:{ticks:{color:'#8b949e',maxTicksLimit:8},grid:{color:'#21262d'}},
+                     y:{ticks:{color:'#8b949e'},grid:{color:'#21262d'}}}}
+  });
+
+  serviceChart = new Chart($('serviceChart'), {
+    type:'doughnut',
+    data:{labels:[],datasets:[{data:[],
+          backgroundColor:['#58a6ff','#3fb950','#d29922','#f85149','#bc8cff','#ff6b6b','#7ee8a2'],
+          borderColor:'#161b22',borderWidth:2}]},
+    options:{plugins:{legend:{position:'bottom',labels:{color:'#8b949e',padding:12}}}}
+  });
+}
+
+// ── Overview ─────────────────────────────────────────────────────────────────
+async function loadOverview(){
+  const stats = await fetch('/api/stats').then(r=>r.json());
+
+  $('c-total').textContent  = stats.total.toLocaleString();
+  $('c-ips').textContent    = stats.unique_ips.toLocaleString();
+  $('c-recent').textContent = stats.recent_count.toLocaleString();
+  $('c-banned').textContent = stats.banned_count.toLocaleString();
+
+  // Timeline
+  const labels = stats.hourly.map(h=>h.hour.substring(11,16));
+  const counts = stats.hourly.map(h=>h.count);
+  timelineChart.data.labels = labels;
+  timelineChart.data.datasets[0].data = counts;
+  timelineChart.update();
+
+  // Service doughnut
+  serviceChart.data.labels   = stats.by_service.map(s=>s.service.toUpperCase());
+  serviceChart.data.datasets[0].data = stats.by_service.map(s=>s.count);
+  serviceChart.update();
+
+  // Top IPs
+  const tbody = $('top-ips-body');
+  tbody.innerHTML = '';
+  stats.top_ips.forEach((row,i)=>{
+    tbody.innerHTML += `
+      <tr>
+        <td>${i+1}</td>
+        <td><code>${row.ip}</code></td>
+        <td>${row.country||'—'}</td>
+        <td><strong>${row.count.toLocaleString()}</strong></td>
+        <td>
+          <button class="btn btn-red" onclick="banIP('${row.ip}')">Ban</button>
+          <button class="btn btn-blue" onclick="filterByIP('${row.ip}')">Details</button>
+        </td>
+      </tr>`;
+  });
+
+  // Credentials
+  loadCredsTable(stats.top_creds);
+}
+
+// ── Live Feed ─────────────────────────────────────────────────────────────────
+async function loadFeed(){
+  const svc = $('feed-service').value;
+  const ip  = $('feed-ip').value.trim();
+  let url = `/api/events?limit=200`;
+  if(svc) url+=`&service=${svc}`;
+  if(ip)  url+=`&ip=${encodeURIComponent(ip)}`;
+
+  const events = await fetch(url).then(r=>r.json());
+  const tbody = $('feed-body');
+  tbody.innerHTML='';
+  events.forEach(e=>{
+    const ts = e.timestamp ? e.timestamp.replace('T',' ').substring(0,19)+' UTC' : '—';
+    tbody.innerHTML += `
+      <tr>
+        <td style="font-size:11px;color:var(--muted)">${ts}</td>
+        <td>${badge(e.service||'', (e.service||'').toUpperCase())}</td>
+        <td>${badge(e.event_type||'connection', e.event_type||'connection')}</td>
+        <td><code>${e.source_ip||'—'}</code></td>
+        <td>${e.country||'—'}</td>
+        <td style="color:var(--accent)">${e.username||'—'}</td>
+        <td style="color:var(--red)">${e.password||'—'}</td>
+        <td style="color:var(--muted);font-size:11px" title="${escHtml(e.payload||'')}">
+          ${e.payload ? escHtml(e.payload).substring(0,60)+(e.payload.length>60?'…':'') : '—'}
+        </td>
+      </tr>`;
+  });
+}
+
+// ── Attackers ─────────────────────────────────────────────────────────────────
+async function loadAttackers(){
+  const stats = await fetch('/api/stats').then(r=>r.json());
+  const tbody = $('attackers-body');
+  tbody.innerHTML = '';
+  stats.top_ips.forEach(row=>{
+    tbody.innerHTML += `
+      <tr>
+        <td><code>${row.ip}</code></td>
+        <td>${row.country||'—'}</td>
+        <td>—</td>
+        <td>—</td>
+        <td><strong>${row.count.toLocaleString()}</strong></td>
+        <td>
+          <button class="btn btn-red" onclick="banIP('${row.ip}')">Ban</button>
+          <button class="btn btn-blue" onclick="filterByIP('${row.ip}')">Feed</button>
+        </td>
+      </tr>`;
+  });
+}
+
+// ── Credentials ───────────────────────────────────────────────────────────────
+async function loadStats(){
+  const stats = await fetch('/api/stats').then(r=>r.json());
+  loadCredsTable(stats.top_creds);
+}
+
+function loadCredsTable(creds){
+  const tbody = $('creds-body');
+  if(!tbody) return;
+  tbody.innerHTML='';
+  creds.forEach((c,i)=>{
+    tbody.innerHTML += `
+      <tr>
+        <td>${i+1}</td>
+        <td style="color:var(--accent)">${escHtml(c.username||'')}</td>
+        <td style="color:var(--red)">${escHtml(c.password||'')}</td>
+        <td><strong>${c.count}</strong></td>
+      </tr>`;
+  });
+}
+
+// ── Services ──────────────────────────────────────────────────────────────────
+async function loadServices(){
+  const svcs = await fetch('/api/services').then(r=>r.json());
+  const grid = $('services-grid');
+  grid.innerHTML='';
+  svcs.forEach(s=>{
+    grid.innerHTML += `
+      <div class="svc-card">
+        <div class="svc-name">${s.service}</div>
+        <div class="svc-port">port ${s.port}</div>
+        <div class="svc-count">${s.count.toLocaleString()}</div>
+        <div class="svc-label">events</div>
+      </div>`;
+  });
+}
+
+// ── Map ───────────────────────────────────────────────────────────────────────
+function loadMap(){
+  const frame = $('heatmap-frame');
+  if(frame.src==='about:blank'){
+    frame.src='/heatmap';
+  }
+}
+
+async function generateHeatmap(){
+  showToast('Generating heatmap…','#d29922');
+  const res = await fetch('/api/heatmap/generate',{method:'POST'}).then(r=>r.json());
+  if(res.status==='ok'){
+    $('heatmap-frame').src='/heatmap?t='+Date.now();
+    showToast('Heatmap updated!');
+  } else {
+    showToast('Error: '+res.error,'#f85149');
+  }
+}
+
+// ── Banned IPs ────────────────────────────────────────────────────────────────
+async function loadBanned(){
+  const list = await fetch('/api/banned').then(r=>r.json());
+  const tbody = $('banned-body');
+  tbody.innerHTML='';
+  if(!list.length){
+    tbody.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--muted)">No banned IPs</td></tr>';
+    return;
+  }
+  list.forEach(row=>{
+    tbody.innerHTML+=`
+      <tr>
+        <td><code>${row.ip}</code></td>
+        <td>${row.reason||'—'}</td>
+        <td style="font-size:11px;color:var(--muted)">${(row.banned_at||'').substring(0,19)} UTC</td>
+        <td><button class="btn btn-green" onclick="unbanIP('${row.ip}')">Unban</button></td>
+      </tr>`;
+  });
+}
+
+// ── Ban / Unban ───────────────────────────────────────────────────────────────
+async function banIP(ip){
+  if(!confirm(`Ban ${ip}?`)) return;
+  const res = await fetch('/api/ban',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ip})}).then(r=>r.json());
+  showToast(`Banned ${ip}`,'#f85149');
+  loadOverview();
+}
+
+async function unbanIP(ip){
+  await fetch('/api/unban',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ip})});
+  showToast(`Unbanned ${ip}`,'#3fb950');
+  loadBanned();
+}
+
+function filterByIP(ip){
+  $('feed-ip').value = ip;
+  showPage('feed');
+}
+
+// ── Util ─────────────────────────────────────────────────────────────────────
+function escHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Auto-refresh every 30s ────────────────────────────────────────────────────
+let _autoRefreshInterval;
+function startAutoRefresh(){
+  _autoRefreshInterval = setInterval(()=>{
+    const activePage = document.querySelector('.page.active');
+    if(activePage){
+      const id = activePage.id.replace('page-','');
+      if(id==='overview') loadOverview();
+      if(id==='feed')     loadFeed();
+    }
+  }, 30000);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded',()=>{
+  initCharts();
+  loadOverview();
+  startAutoRefresh();
+});
+</script>
 </body>
 </html>

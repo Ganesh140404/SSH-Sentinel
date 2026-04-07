@@ -1,26 +1,25 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*.pyo
+# secrets
+.env
+honeypot_host_key
+honeypot_host_key.pub
 
-# Log and output files
+# database & logs
+*.db
 *.log
 auth_log.txt
-chart.png
-report.csv
 
-# System files
-.DS_Store
-Thumbs.db
+# generated output
+static/attack_heatmap.html
+static/chart.png
+static/report.csv
 
-# VS Code / JetBrains / IDE files
-.vscode/
-.idea/
-
-# Python virtual environments
-env/
-venv/
+# python
+__pycache__/
+*.pyc
+*.pyo
 .venv/
+venv/
+*.egg-info/
 
-# OS-generated files
-*.swp
+# OS
+.DS_Store

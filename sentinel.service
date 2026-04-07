@@ -1,0 +1,26 @@
+[Unit]
+Description=SSH Sentinel Honeypot Engine
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sentinel
+Group=sentinel
+WorkingDirectory=/opt/ssh-sentinel
+EnvironmentFile=/opt/ssh-sentinel/.env
+ExecStart=/usr/bin/python3 /opt/ssh-sentinel/main.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/opt/ssh-sentinel/sentinel.log
+StandardError=append:/opt/ssh-sentinel/sentinel.log
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/ssh-sentinel
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
